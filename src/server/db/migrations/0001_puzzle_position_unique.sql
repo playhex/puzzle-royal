@@ -1,0 +1,1 @@
+ALTER TABLE `puzzle` ADD CONSTRAINT `puzzle_position_unq` UNIQUE(`red_stones`,`blue_stones`);
