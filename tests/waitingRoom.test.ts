@@ -164,4 +164,30 @@ describe('WaitingRoom', () => {
         room.waitMore('b');
         expect(remaining()).toBe(20_000);
     });
+
+    it('does not start countdown while paused, starts it once unpaused', () => {
+        room.setPaused(true);
+        room.join(profile('a'));
+        room.join(profile('b'));
+        room.setReady('a', true);
+        room.setReady('b', true);
+        expect(remaining()).toBe(null);
+        expect(room.isCountdownOver()).toBe(false);
+
+        now += 30_000;
+        room.setPaused(false);
+        expect(remaining()).toBe(5_000);
+    });
+
+    it('clears running countdown when paused', () => {
+        room.join(profile('a'));
+        room.join(profile('b'));
+        now += 10_000;
+
+        room.setPaused(true);
+        expect(remaining()).toBe(null);
+
+        room.setPaused(false);
+        expect(remaining()).toBe(60_000);
+    });
 });

@@ -91,7 +91,7 @@ export class GameManager {
         return {
             players: this.room.getPlayers().map(({ profile, ready, connected }) => ({ profile, ready, connected })),
             deadline: this.room.getDeadline(),
-            waitingForGameEnd: this.room.isCountdownOver() && this.game !== null,
+            waitingForGameEnd: this.room.isPaused() && this.room.count >= this.roomConfig.minPlayers,
             startError: this.startError,
             minPlayers: this.roomConfig.minPlayers,
             ...this.lobbySpectators(),
@@ -247,6 +247,7 @@ export class GameManager {
                     io.emit('gameEnd', event);
                     this.game = null;
                     this.lastGameEndAt = serverNow();
+                    this.room.setPaused(false);
                     this.broadcastLobby(true);
 
                     this.onGameSaved(record).catch(e => console.error('Could not save game', record.gameId, e));
@@ -256,6 +257,7 @@ export class GameManager {
         );
 
         this.game = game;
+        this.room.setPaused(true);
         this.starting = false;
         this.startError = null;
         game.start();

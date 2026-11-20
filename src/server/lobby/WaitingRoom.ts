@@ -15,6 +15,7 @@ export type WaitingPlayer = {
  * - Each newcomer brings countdown back to at least `newcomerMinCountdownMs`, never above `maxCountdownMs`.
  * - When all players are ready, countdown drops to `allReadyCountdownMs`.
  * - Players disconnected for too long are removed.
+ * - No countdown while paused (a game is running), it starts when unpaused.
  *
  * Pure logic, time is injected.
  */
@@ -23,6 +24,9 @@ export class WaitingRoom {
 
     /** Time at which game can start, null while not enough players. */
     private deadline: null | number = null;
+
+    /** Paused while a game is running: players can register, but countdown does not start. */
+    private paused = false;
 
     constructor(
         private config: WaitingRoomConfig,
@@ -58,7 +62,7 @@ export class WaitingRoom {
 
         const now = this.now();
 
-        if (this.players.size < this.config.minPlayers) {
+        if (this.paused || this.players.size < this.config.minPlayers) {
             return;
         }
 
@@ -101,6 +105,27 @@ export class WaitingRoom {
         }
 
         this.deadline = Math.max(this.deadline, this.now() + this.config.waitMoreMs);
+    }
+
+    isPaused(): boolean {
+        return this.paused;
+    }
+
+    /**
+     * Pause while a game is running: countdown is cleared, and restarts from beginning once unpaused.
+     */
+    setPaused(paused: boolean): void {
+        if (this.paused === paused) {
+            return;
+        }
+
+        this.paused = paused;
+
+        if (paused) {
+            this.deadline = null;
+        } else {
+            this.update();
+        }
     }
 
     setConnected(publicId: string, connected: boolean): void {
@@ -157,7 +182,7 @@ export class WaitingRoom {
     }
 
     private update(): void {
-        if (this.players.size < this.config.minPlayers) {
+        if (this.paused || this.players.size < this.config.minPlayers) {
             this.deadline = null;
             return;
         }
