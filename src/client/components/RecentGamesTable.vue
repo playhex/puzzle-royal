@@ -2,10 +2,11 @@
 import { onMounted, ref } from 'vue';
 import { api, type RecentGame } from '../api.js';
 
+const props = defineProps<{ featured?: boolean }>();
 const games = ref<null | RecentGame[]>(null);
 
 onMounted(async () => {
-    games.value = await api.recentGames().catch(() => []);
+    games.value = await (props.featured ? api.featuredGames() : api.recentGames()).catch(() => []);
 });
 
 const formatDate = (d: string) => new Date(d).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
