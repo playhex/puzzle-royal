@@ -1,4 +1,4 @@
-import { Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
+import { Container, Graphics, Matrix, Rectangle, RenderTexture, Sprite, Texture } from 'pixi.js';
 import { Hex, type BoardRenderContext, type BoardRenderer, type BoardView, type GameView } from '@playhex/pixi-board';
 
 export type CellAppearance = {
@@ -19,7 +19,7 @@ const CELL_RADIUS = Hex.RADIUS + 0.2;
 const SLOT_W = Math.ceil(CELL_RADIUS * Math.sqrt(3)) + 4;
 const SLOT_H = Math.ceil(CELL_RADIUS * 2) + 4;
 
-const hexagon = (g: Graphics, x: number, y: number): Graphics => {
+const hexagonPoints = (x: number, y: number): number[] => {
     const points = [];
 
     for (let i = 0; i < 6; ++i) {
@@ -28,14 +28,15 @@ const hexagon = (g: Graphics, x: number, y: number): Graphics => {
         points.push(x + c.x, y + c.y);
     }
 
-    return g.poly(points).fill({ color: 0xffffff });
+    return points;
 };
+
+const hexagon = (g: Graphics, x: number, y: number): Graphics => g.poly(hexagonPoints(x, y)).fill({ color: 0xffffff });
 
 type Drawn = {
     innerView: BoardView;
     cellsLayer: Container;
     cells: Sprite[][];
-    atlas: null | Texture;
     boardsize: number;
 };
 
@@ -48,14 +49,25 @@ type Drawn = {
  *   No mask is rendered each frame, and all cells are drawn in a single batch,
  * - original board stays displayed outside cells (inverse mask), so sides and their highlight still work,
  * - shading changes are forwarded to original board, and texture is regenerated.
+ *
+ * Render textures are created once and resized/redrawn in place, never destroyed while displayed:
+ * destroying a texture still referenced by a cached GPU bind group can display garbage on some GPUs.
  */
 export class AnimatedCellsBoard {
     private drawn: null | Drawn = null;
     private appearances = new Map<number, CellAppearance>();
     private regenerateScheduled = false;
+    private boardTexture: null | RenderTexture = null;
+    private atlasTexture: null | RenderTexture = null;
 
     constructor(private gameView: GameView) {
         gameView.on('resized', () => this.regenerateTexture());
+        gameView.on('destroyBefore', () => {
+            this.drawn = null;
+            this.boardTexture?.destroy(true);
+            this.atlasTexture?.destroy(true);
+            this.boardTexture = this.atlasTexture = null;
+        });
     }
 
     wrap(inner: BoardRenderer): BoardRenderer {
@@ -102,8 +114,7 @@ export class AnimatedCellsBoard {
     private render(inner: BoardRenderer, ctx: BoardRenderContext): BoardView {
         const innerView = inner(ctx);
 
-        // Previous container is destroyed by GameView, not its texture
-        this.drawn?.atlas?.destroy(true);
+        // Previous container is destroyed by GameView, render textures are reused
         this.drawn = null;
 
         if (!this.isPixiReady()) {
@@ -141,7 +152,7 @@ export class AnimatedCellsBoard {
             }
         }
 
-        this.drawn = { innerView, cellsLayer, cells, atlas: null, boardsize: ctx.boardsize };
+        this.drawn = { innerView, cellsLayer, cells, boardsize: ctx.boardsize };
         this.regenerateTexture();
 
         return {
@@ -182,7 +193,8 @@ export class AnimatedCellsBoard {
         const target = drawn.innerView.container;
         const sides = drawn.innerView.sides ?? [];
         const sidesVisible = sides.map(s => s.visible);
-        const wt = drawn.cellsLayer.worldTransform;
+        // worldTransform is only updated on render, may be stale right after a resize
+        const wt = drawn.cellsLayer.getGlobalTransform(new Matrix(), false);
         const displayScale = Math.hypot(wt.a, wt.b) || 1;
         const resolution = Math.min(4, Math.max(1, displayScale * renderer.resolution));
         const { boardsize } = drawn;
@@ -190,48 +202,75 @@ export class AnimatedCellsBoard {
         sides.forEach(s => s.visible = false);
 
         const bounds = target.getLocalBounds();
-        const boardTexture = renderer.generateTexture({ target, resolution, antialias: true });
+        const boardTexture = this.boardTexture = this.renderInto(this.boardTexture, bounds.width, bounds.height, resolution, {
+            container: target,
+            transform: new Matrix().translate(-bounds.x, -bounds.y),
+        });
 
         sides.forEach((s, i) => s.visible = sidesVisible[i]);
 
-        // Masks are rendered only here, once, not each frame
-        const atlasContent = new Container();
+        // Each slot is a hexagon filled with the board texture, no mask/stencil needed
+        const atlasContent = new Graphics();
 
         for (let row = 0; row < boardsize; ++row) {
             for (let col = 0; col < boardsize; ++col) {
                 const { x, y } = Hex.coords(row, col);
-                const slot = new Container();
-                const sprite = new Sprite(boardTexture);
-                const mask = hexagon(new Graphics(), 0, 0);
+                const slotX = col * SLOT_W + SLOT_W / 2;
+                const slotY = row * SLOT_H + SLOT_H / 2;
 
-                slot.position.set(col * SLOT_W + SLOT_W / 2, row * SLOT_H + SLOT_H / 2);
-                sprite.position.set(bounds.x - x, bounds.y - y);
-                sprite.mask = mask;
-                slot.addChild(sprite, mask);
-                atlasContent.addChild(slot);
-            }
-        }
-
-        const atlas = renderer.generateTexture({
-            target: atlasContent,
-            frame: new Rectangle(0, 0, boardsize * SLOT_W, boardsize * SLOT_H),
-            resolution,
-            antialias: true,
-        });
-
-        atlasContent.destroy({ children: true });
-        boardTexture.destroy(true);
-
-        for (let row = 0; row < boardsize; ++row) {
-            for (let col = 0; col < boardsize; ++col) {
-                drawn.cells[row][col].texture = new Texture({
-                    source: atlas.source,
-                    frame: new Rectangle(col * SLOT_W, row * SLOT_H, SLOT_W, SLOT_H),
+                atlasContent.poly(hexagonPoints(slotX, slotY)).fill({
+                    texture: boardTexture,
+                    textureSpace: 'global',
+                    matrix: new Matrix().translate(slotX + bounds.x - x, slotY + bounds.y - y),
                 });
             }
         }
 
-        drawn.atlas?.destroy(true);
-        drawn.atlas = atlas;
+        const atlas = this.atlasTexture = this.renderInto(this.atlasTexture, boardsize * SLOT_W, boardsize * SLOT_H, resolution, {
+            container: atlasContent,
+            transform: new Matrix(),
+        });
+
+        atlasContent.destroy();
+
+        for (let row = 0; row < boardsize; ++row) {
+            for (let col = 0; col < boardsize; ++col) {
+                const cell = drawn.cells[row][col];
+                const previous = cell.texture;
+
+                cell.texture = new Texture({
+                    source: atlas.source,
+                    frame: new Rectangle(col * SLOT_W, row * SLOT_H, SLOT_W, SLOT_H),
+                });
+
+                if (previous !== Texture.EMPTY) {
+                    previous.destroy(false);
+                }
+            }
+        }
+    }
+
+    /**
+     * Render a container into a reused render texture, resized if needed.
+     */
+    private renderInto(
+        texture: null | RenderTexture,
+        width: number,
+        height: number,
+        resolution: number,
+        options: { container: Container, transform: Matrix },
+    ): RenderTexture {
+        width = Math.max(1, Math.ceil(width));
+        height = Math.max(1, Math.ceil(height));
+
+        if (texture === null) {
+            texture = RenderTexture.create({ width, height, resolution, antialias: true });
+        } else if (texture.source.width !== width || texture.source.height !== height || texture.source.resolution !== resolution) {
+            texture.source.resize(width, height, resolution);
+        }
+
+        this.gameView.getPixiApp().renderer.render({ ...options, target: texture, clearColor: [0, 0, 0, 0] });
+
+        return texture;
     }
 }
