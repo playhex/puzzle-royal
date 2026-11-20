@@ -85,6 +85,7 @@ export type AdminPuzzle = {
 export const api = {
     me: () => get<null | Me>('/api/me'),
     leaderboard: () => get<Leaderboard>('/api/leaderboard'),
+    featuredGames: () => get<RecentGame[]>('/api/games/featured'),
     recentGames: () => get<RecentGame[]>('/api/games/recent'),
     puzzlesCount: async () => (await get<{ count: number }>('/api/puzzles/count')).count,
     game: (gameId: string) => get<ReplayData>(`/api/games/${encodeURIComponent(gameId)}`),

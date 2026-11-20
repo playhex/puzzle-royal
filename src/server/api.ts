@@ -52,17 +52,34 @@ apiRouter.get('/puzzles/count', async (_req, res) => {
     res.json({ count: n });
 });
 
-apiRouter.get('/games/recent', async (_req, res) => {
-    const games = await db.select().from(replayGame).orderBy(desc(replayGame.endedAt)).limit(20);
+const toRecentGames = async (games: (typeof replayGame.$inferSelect)[]) => {
     const winnersOf = await gamesWinners(games.map(g => g.id));
 
-    res.json(games.map(g => ({
+    return games.map(g => ({
         gameId: g.publicId,
         endedAt: g.endedAt,
         playersCount: g.playersCount,
         roundsCount: g.roundsCount,
         winners: winnersOf(g.id),
-    })));
+    }));
+};
+
+apiRouter.get('/games/recent', async (_req, res) => {
+    const games = await db.select().from(replayGame).orderBy(desc(replayGame.endedAt)).limit(20);
+
+    res.json(await toRecentGames(games));
+});
+
+/**
+ * Among recent games, the 5 with most players, then most rounds.
+ */
+apiRouter.get('/games/featured', async (_req, res) => {
+    const recent = db.select().from(replayGame).orderBy(desc(replayGame.endedAt)).limit(30).as('recent');
+    const games = await db.select().from(recent)
+        .orderBy(desc(recent.playersCount), desc(recent.roundsCount), desc(recent.endedAt))
+        .limit(5);
+
+    res.json(await toRecentGames(games));
 });
 
 /**

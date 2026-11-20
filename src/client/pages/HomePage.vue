@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { useLobby } from '../composables/useLobby.js';
 import AppHeader from '../components/AppHeader.vue';
 import BackgroundArt from '../components/BackgroundArt.vue';
+import FeaturedReplay from '../components/FeaturedReplay.vue';
 import type { PlayerProfile } from '../../shared/profile.js';
 
 const route = useRoute();
@@ -53,7 +54,9 @@ onMounted(async () => {
                     </div>
                 </div>
 
-                <aside class="side" />
+                <aside class="side">
+                    <FeaturedReplay />
+                </aside>
             </div>
         </main>
 
