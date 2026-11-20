@@ -5,6 +5,7 @@ import { connectLive, live, liveActions } from '../live.js';
 import { useLobby } from '../composables/useLobby.js';
 import { useSessionStore } from '../stores/session.js';
 import AppHeader from '../components/AppHeader.vue';
+import BackgroundArt from '../components/BackgroundArt.vue';
 import GameScreen from '../components/GameScreen.vue';
 import NextGamePanel from '../components/NextGamePanel.vue';
 import PlayerAvatar from '../components/PlayerAvatar.vue';
@@ -66,6 +67,7 @@ const gameSpectators = computed(() => {
         </GameScreen>
 
         <template v-else>
+            <BackgroundArt />
             <AppHeader />
 
             <main class="waiting container py-3">

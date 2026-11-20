@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import { api } from '../api.js';
 import { useLobby } from '../composables/useLobby.js';
 import AppHeader from '../components/AppHeader.vue';
+import BackgroundArt from '../components/BackgroundArt.vue';
 
 const route = useRoute();
 const { playLabel, play } = useLobby();
@@ -16,6 +17,7 @@ onMounted(async () => {
 
 <template>
     <div class="page d-flex flex-column">
+        <BackgroundArt />
         <AppHeader />
 
         <main class="home d-flex flex-column align-items-center gap-5 p-3 text-center">
