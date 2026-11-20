@@ -17,10 +17,14 @@ export const puzzle = mysqlTable('puzzle', {
     initialDifficulty: tinyint('initial_difficulty'),
 
     importedAt: datetime('imported_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+
+    /** Last time this puzzle appeared in a game, to show least recently shown ones first. null when never shown */
+    lastShownAt: datetime('last_shown_at'),
 }, t => [
     /** Stones are sorted on import, so a same position is never imported twice */
     unique('puzzle_position_unq').on(t.redStones, t.blueStones),
     index('puzzle_initial_difficulty_idx').on(t.initialDifficulty),
+    index('puzzle_last_shown_at_idx').on(t.lastShownAt),
 ]);
 
 /**

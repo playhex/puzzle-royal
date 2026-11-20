@@ -22,6 +22,13 @@
       "when": 1795172779330,
       "tag": "0002_puzzle_initial_difficulty",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1795210580014,
+      "tag": "0003_puzzle_last_shown_at",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { and, eq, notInArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, notInArray, sql, type SQL } from 'drizzle-orm';
 import { parseStones, type Puzzle } from '../../shared/puzzle.js';
 import { db } from '../db/index.js';
 import { puzzle } from '../db/schema.js';
@@ -32,19 +32,27 @@ const pick = async (count: number, excludeIds: number[], difficulty?: number): P
 
     const rows = await db.select().from(puzzle)
         .where(and(...conditions))
-        .orderBy(sql`RAND()`)
+        // Never shown first (null sorts first), then least recently shown
+        .orderBy(asc(puzzle.lastShownAt), sql`RAND()`)
         .limit(count);
 
     return rows.map(rowToPuzzle);
 };
 
 /**
- * Random puzzles of any difficulty, not already played in this game.
+ * Remembers when a puzzle was shown, so that it is not shown again too soon.
+ */
+export const markPuzzleShown = async (puzzleId: number): Promise<void> => {
+    await db.update(puzzle).set({ lastShownAt: new Date() }).where(eq(puzzle.id, puzzleId));
+};
+
+/**
+ * Least recently shown puzzles of any difficulty, not already played in this game.
  */
 export const pickRandomPuzzles = async (count: number, excludeIds: number[] = []): Promise<ServerPuzzle[]> => pick(count, excludeIds);
 
 /**
- * Puzzles for a new game: 2 easy, then 2 medium, then random ones of any difficulty.
+ * Least recently shown puzzles for a new game: 2 easy, then 2 medium, then random ones of any difficulty.
  * Missing easy or medium puzzles are replaced by random ones.
  */
 export const pickGameStartPuzzles = async (count: number): Promise<ServerPuzzle[]> => {

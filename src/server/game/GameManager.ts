@@ -7,7 +7,7 @@ import type { PlayerProfile } from '../../shared/profile.js';
 import { serverNow } from '../clock.js';
 import { WaitingRoom } from '../lobby/WaitingRoom.js';
 import { GameServer, type GameRecord } from './GameServer.js';
-import { pickGameStartPuzzles, pickRandomPuzzles } from './puzzleProvider.js';
+import { markPuzzleShown, pickGameStartPuzzles, pickRandomPuzzles } from './puzzleProvider.js';
 import { saveGame } from './GameRecorder.js';
 
 export type SocketData = {
@@ -237,7 +237,10 @@ export class GameManager {
             this.gameConfig,
             randomSeed(),
             {
-                onRoundStart: round => io.emit('roundStart', round),
+                onRoundStart: (round, puzzleId) => {
+                    io.emit('roundStart', round);
+                    void markPuzzleShown(puzzleId).catch(e => console.error('Could not mark puzzle as shown', puzzleId, e));
+                },
                 onInput: input => io.emit('input', inputToTuple(input)),
                 onDrop: event => io.emit('drop', event),
                 onEnd: (event, record) => {

@@ -39,7 +39,7 @@ export type GameRecord = {
 };
 
 export type GameServerEvents = {
-    onRoundStart: (round: LiveRound) => void;
+    onRoundStart: (round: LiveRound, puzzleId: number) => void;
     onInput: (input: Input) => void;
     onDrop: (event: DropEvent) => void;
     onEnd: (event: GameEndEvent, record: GameRecord) => void;
@@ -213,7 +213,7 @@ export class GameServer {
 
         this.schedule(times.appearAt, () => {
             this.currentRound = { roundIndex, puzzle, origin, times };
-            this.events.onRoundStart(this.toPublicRound(this.currentRound, false));
+            this.events.onRoundStart(this.toPublicRound(this.currentRound, false), puzzle.id);
         });
 
         this.schedule(times.dropAt, () => this.resolveRound());
