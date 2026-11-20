@@ -409,6 +409,13 @@ export class FallBoardView {
     private renderSolution(round: LiveRound, t: number): void {
         if (!round.solution || t < round.times.dropAt) {
             this.highlight.visible = false;
+
+            // Rewinding in replay: hide solution stone again
+            if (this.solutionStone) {
+                this.gameView.setStone(this.solutionStone, null);
+                this.solutionStone = null;
+            }
+
             return;
         }
 
