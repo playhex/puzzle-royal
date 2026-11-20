@@ -9,8 +9,10 @@ import BackgroundArt from '../components/BackgroundArt.vue';
 const route = useRoute();
 const { playLabel, play } = useLobby();
 const hasReplays = ref(false);
+const puzzlesCount = ref<null | number>(null);
 
 onMounted(async () => {
+    api.puzzlesCount().then(n => puzzlesCount.value = n).catch(() => {});
     hasReplays.value = (await api.recentGames().catch(() => [])).length > 0;
 });
 </script>
@@ -33,6 +35,8 @@ onMounted(async () => {
                 </div>
             </div>
         </main>
+
+        <p v-if="puzzlesCount !== null" class="mt-auto mb-0 py-3 text-center text-secondary small">{{ puzzlesCount }} puzzles</p>
     </div>
 </template>
 

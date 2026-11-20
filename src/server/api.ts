@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { Router, type Request } from 'express';
 import type { Move } from '@playhex/move-notation';
 import { db } from './db/index.js';
@@ -45,6 +45,12 @@ const gamesWinners = async (gameIds: number[]) => {
         .filter(w => w.gameId === gameId)
         .map(w => ({ publicId: w.playerPublicId, pseudo: w.pseudo, countryFlag: w.countryFlag }));
 };
+
+apiRouter.get('/puzzles/count', async (_req, res) => {
+    const [{ n }] = await db.select({ n: count() }).from(puzzle);
+
+    res.json({ count: n });
+});
 
 apiRouter.get('/games/recent', async (_req, res) => {
     const games = await db.select().from(replayGame).orderBy(desc(replayGame.endedAt)).limit(20);

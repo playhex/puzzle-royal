@@ -70,6 +70,8 @@ Only new positions are added: running it again never duplicates puzzles nor rese
 - `lastMove`: last blue move, highlighted on the board, or `null`.
 - `solution`: the only winning move.
 
+To generate new puzzles, see [generator/](generator/README.md).
+
 ## Puzzle stats
 
 ``` bash
