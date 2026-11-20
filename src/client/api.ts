@@ -57,7 +57,7 @@ export type PlayerStats = {
     games: (RecentGame & { place: number })[];
 };
 
-/** Top 50 of the last 365 days, by wins then fewer games played */
+/** Top 50 of the last 365 days, by opponents outlasted then fewer games played */
 export type Leaderboard = { player: PlayerProfile; wins: number; gamesPlayed: number; opponentsSurvived: number }[];
 
 /** 1 easy, 2 medium, 3 hard */

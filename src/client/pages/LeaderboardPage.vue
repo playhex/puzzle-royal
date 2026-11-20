@@ -29,10 +29,10 @@ const winRate = (wins: number, games: number) => games > 0 ? `${Math.round(wins 
                     <tr v-for="(p, i) in leaderboard" :key="p.player.publicId">
                         <td class="fw-semibold">{{ medals[i] ?? i + 1 }}</td>
                         <td><PlayerName :player="p.player" link /></td>
-                        <td class="text-end fw-bold">{{ p.wins }}</td>
+                        <td class="text-end">{{ p.wins }}</td>
                         <td class="text-end">{{ p.gamesPlayed }}</td>
                         <td class="text-end">{{ winRate(p.wins, p.gamesPlayed) }}</td>
-                        <td class="text-end">{{ p.opponentsSurvived }}</td>
+                        <td class="text-end fw-bold">{{ p.opponentsSurvived }}</td>
                     </tr>
                     <tr v-if="leaderboard.length === 0"><td colspan="6" class="text-body-secondary small">No game played yet</td></tr>
                 </tbody>

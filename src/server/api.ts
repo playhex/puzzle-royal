@@ -167,7 +167,7 @@ apiRouter.get('/players/:publicId/stats', async (req, res) => {
 });
 
 /**
- * Top players of the last 365 days, by wins then fewer games played.
+ * Top players of the last 365 days, by opponents outlasted then fewer games played.
  */
 apiRouter.get('/leaderboard', async (_req, res) => {
     const wins = sql<number>`CAST(SUM(${replayPlayer.finalPlace} = 1) AS UNSIGNED)`;
@@ -186,7 +186,7 @@ apiRouter.get('/leaderboard', async (_req, res) => {
         .innerJoin(playerTable, eq(playerTable.publicId, replayPlayer.playerPublicId))
         .where(gte(replayGame.endedAt, new Date(Date.now() - 365 * 24 * 3600 * 1000)))
         .groupBy(replayPlayer.playerPublicId)
-        .orderBy(desc(wins), asc(gamesPlayed))
+        .orderBy(desc(opponentsSurvived), asc(gamesPlayed))
         .limit(50);
 
     res.json(rows.map(r => ({ player: toProfile(r.player), wins: Number(r.wins), gamesPlayed: r.gamesPlayed, opponentsSurvived: Number(r.opponentsSurvived) })));
