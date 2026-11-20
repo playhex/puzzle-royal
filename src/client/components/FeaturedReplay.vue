@@ -22,7 +22,7 @@ const joinNames = (names: string[]) => names.length <= 1
     : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 
 /**
- * "Winner outlasted A, B, C, D…", or "X and Y outlasted …" when last players fell together.
+ * "Winner outlasted A, B, C, D and 3 others", or "X and Y outlasted …" when last players fell together.
  */
 const summary = computed(() => {
     if (!model.value) return null;
@@ -38,7 +38,10 @@ const summary = computed(() => {
 
     return {
         winners: joinNames(winners),
-        outlasted: shown.join(', ') + (others.length > shown.length ? '…' : ''),
+        // Show the last name rather than "and 1 other"
+        outlasted: others.length - shown.length > 1
+            ? `${shown.join(', ')} and ${others.length - shown.length} others`
+            : joinNames(others),
     };
 });
 

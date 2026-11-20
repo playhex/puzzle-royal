@@ -33,10 +33,10 @@ onMounted(async () => {
             <h1 class="hexfall-title display-3 m-0">Hex <span class="fall">Fall</span></h1>
 
             <div class="home-row">
-                <aside class="side">
+                <aside class="side text-start">
                     <template v-if="topPlayers.length > 0">
                         <h6 class="text-body-secondary">Top players</h6>
-                        <ol class="list-unstyled m-0">
+                        <ol class="list-unstyled m-0 fs-5">
                             <li v-for="(p, i) in topPlayers" :key="p.publicId" class="text-truncate">
                                 <span class="text-body-secondary me-1">{{ medals[i] ?? `${i + 1}.` }}</span>
                                 <RouterLink :to="`/profile/${p.publicId}`" class="text-reset">{{ p.pseudo }}</RouterLink>
@@ -107,7 +107,6 @@ onMounted(async () => {
 
 .side:first-child {
     justify-self: end;
-    text-align: start;
     min-width: 0;
     max-width: 200px;
 }
@@ -129,7 +128,6 @@ onMounted(async () => {
 
     .side:first-child {
         justify-self: center;
-        text-align: center;
     }
 }
 </style>
