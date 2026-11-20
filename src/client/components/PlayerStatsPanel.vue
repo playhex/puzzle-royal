@@ -30,7 +30,7 @@ const formatDate = (d: string) => new Date(d).toLocaleString(undefined, { dateSt
             <div class="col-3"><div class="border rounded p-2"><div class="fs-4 fw-bold">{{ stats.gamesPlayed }}</div><small>games</small></div></div>
             <div class="col-3"><div class="border rounded p-2"><div class="fs-4 fw-bold">{{ stats.wins }}</div><small>wins</small></div></div>
             <div class="col-3"><div class="border rounded p-2"><div class="fs-4 fw-bold">{{ stats.puzzlesSolved }}</div><small>puzzles solved</small></div></div>
-            <div class="col-3"><div class="border rounded p-2"><div class="fs-4 fw-bold">{{ stats.opponentsSurvivedTotal }}</div><small>opponents survived</small></div></div>
+            <div class="col-3"><div class="border rounded p-2"><div class="fs-4 fw-bold">{{ stats.opponentsSurvivedTotal }}</div><small>opponents outlasted</small></div></div>
         </div>
 
         <template v-if="stats.opponentsSurvived.length">

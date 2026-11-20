@@ -57,6 +57,9 @@ export type PlayerStats = {
     games: (RecentGame & { place: number })[];
 };
 
+/** Top 50 of the last 365 days, by wins then fewer games played */
+export type Leaderboard = { player: PlayerProfile; wins: number; gamesPlayed: number; opponentsSurvived: number }[];
+
 /** 1 easy, 2 medium, 3 hard */
 export type Difficulty = 1 | 2 | 3;
 
@@ -81,6 +84,7 @@ export type AdminPuzzle = {
 
 export const api = {
     me: () => get<null | Me>('/api/me'),
+    leaderboard: () => get<Leaderboard>('/api/leaderboard'),
     recentGames: () => get<RecentGame[]>('/api/games/recent'),
     puzzlesCount: async () => (await get<{ count: number }>('/api/puzzles/count')).count,
     game: (gameId: string) => get<ReplayData>(`/api/games/${encodeURIComponent(gameId)}`),

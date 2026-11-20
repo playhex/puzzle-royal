@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import type { Move } from '@playhex/move-notation';
 import { db } from './db/index.js';
@@ -147,6 +147,32 @@ apiRouter.get('/players/:publicId/stats', async (req, res) => {
         opponentsSurvived: opponents.map(o => ({ publicId: o.opponentPublicId, pseudo: o.opponentPseudo, count: o.count })),
         games: games.map(({ id, ...g }) => ({ ...g, winners: winnersOf(id) })),
     });
+});
+
+/**
+ * Top players of the last 365 days, by wins then fewer games played.
+ */
+apiRouter.get('/leaderboard', async (_req, res) => {
+    const wins = sql<number>`CAST(SUM(${replayPlayer.finalPlace} = 1) AS UNSIGNED)`;
+    const gamesPlayed = count();
+
+    // Opponents eliminated before player in each game, fell together count as same place.
+    // Written raw: drizzle does not qualify columns in correlated subqueries.
+    const opponentsSurvived = sql<number>`CAST(SUM((
+        SELECT COUNT(*) FROM replay_player opponent
+        WHERE opponent.game_id = replay_player.game_id AND opponent.final_place > replay_player.final_place
+    )) AS UNSIGNED)`;
+
+    const rows = await db.select({ player: playerTable, wins, gamesPlayed, opponentsSurvived })
+        .from(replayPlayer)
+        .innerJoin(replayGame, eq(replayGame.id, replayPlayer.gameId))
+        .innerJoin(playerTable, eq(playerTable.publicId, replayPlayer.playerPublicId))
+        .where(gte(replayGame.endedAt, new Date(Date.now() - 365 * 24 * 3600 * 1000)))
+        .groupBy(replayPlayer.playerPublicId)
+        .orderBy(desc(wins), asc(gamesPlayed))
+        .limit(50);
+
+    res.json(rows.map(r => ({ player: toProfile(r.player), wins: Number(r.wins), gamesPlayed: r.gamesPlayed, opponentsSurvived: Number(r.opponentsSurvived) })));
 });
 
 /**

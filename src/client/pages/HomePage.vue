@@ -31,6 +31,7 @@ onMounted(async () => {
                 <button class="btn btn-lg btn-primary" @click="play">{{ playLabel }}</button>
                 <div class="d-flex flex-column gap-2">
                     <RouterLink to="/tutorial" class="btn btn-outline-secondary">Tutorial</RouterLink>
+                    <RouterLink to="/leaderboard" class="btn btn-outline-secondary">Leaderboard</RouterLink>
                     <RouterLink v-if="hasReplays" to="/replays" class="btn btn-outline-secondary">Replays</RouterLink>
                 </div>
             </div>
