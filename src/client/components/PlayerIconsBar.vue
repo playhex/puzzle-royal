@@ -5,7 +5,7 @@ import PlayerAvatar from './PlayerAvatar.vue';
 defineProps<{ players: { idx: number; profile: PlayerProfile; eliminated: boolean; me: boolean }[] }>();
 
 /** Same hexagon as PlayerAvatar clip-path */
-const HEXAGON = '50,0 93,25 93,75 50,100 7,75 7,25';
+const HEXAGON = '25,0 75,0 100,50 75,100 25,100 0,50';
 </script>
 
 <template>
