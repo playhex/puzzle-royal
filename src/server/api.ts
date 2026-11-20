@@ -1,5 +1,5 @@
-import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
-import { Router, type Request } from 'express';
+import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
+import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import type { Move } from '@playhex/move-notation';
 import { db } from './db/index.js';
 import { player as playerTable, replayGame, replayInputs, replayPlayer, replayRound, playerStats, playerSurvivedOpponent, puzzle, puzzleStats, puzzleWrongCell } from './db/schema.js';
@@ -167,6 +167,7 @@ export const queryPuzzleStats = async () => {
         return {
             id: p.id,
             puzzle: rowToPuzzle(p),
+            initialDifficulty: p.initialDifficulty,
             timesShown: s.timesShown,
             playersPresent: s.playersPresent,
             roundsWithElimination: s.roundsWithElimination,
@@ -182,7 +183,10 @@ export const queryPuzzleStats = async () => {
     });
 };
 
-apiRouter.get('/admin/puzzles', async (req, res) => {
+/**
+ * Rejects non admin players on all /admin routes.
+ */
+const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
     const player = await currentPlayer(req);
 
     if (!player || !env.adminPublicIds.includes(player.publicId)) {
@@ -190,5 +194,67 @@ apiRouter.get('/admin/puzzles', async (req, res) => {
         return;
     }
 
+    next();
+};
+
+apiRouter.use('/admin', requireAdmin);
+
+apiRouter.get('/admin/check', (_req, res) => {
+    res.json({ ok: true });
+});
+
+apiRouter.get('/admin/puzzles', async (_req, res) => {
     res.json(await queryPuzzleStats());
+});
+
+/**
+ * Next puzzle without initial difficulty, with id greater than ?after (to skip puzzles).
+ */
+apiRouter.get('/admin/puzzles/unrated/next', async (req, res) => {
+    const after = Number(req.query.after) || 0;
+    const [[row], [{ remaining }]] = await Promise.all([
+        db.select().from(puzzle)
+            .where(and(isNull(puzzle.initialDifficulty), gt(puzzle.id, after)))
+            .orderBy(asc(puzzle.id)).limit(1),
+        db.select({ remaining: count() }).from(puzzle).where(isNull(puzzle.initialDifficulty)),
+    ]);
+
+    res.json({
+        puzzle: row ? { ...rowToPuzzle(row), initialDifficulty: row.initialDifficulty } : null,
+        remaining,
+    });
+});
+
+/**
+ * One puzzle with its initial difficulty, to go back and change it.
+ */
+apiRouter.get('/admin/puzzles/:id', async (req, res) => {
+    const [[row], [{ remaining }]] = await Promise.all([
+        db.select().from(puzzle).where(eq(puzzle.id, Number(req.params.id) || 0)).limit(1),
+        db.select({ remaining: count() }).from(puzzle).where(isNull(puzzle.initialDifficulty)),
+    ]);
+
+    if (!row) {
+        res.status(404).json({ error: 'puzzle_not_found' });
+        return;
+    }
+
+    res.json({
+        puzzle: { ...rowToPuzzle(row), initialDifficulty: row.initialDifficulty },
+        remaining,
+    });
+});
+
+apiRouter.post('/admin/puzzles/:id/initial-difficulty', express.json(), async (req, res) => {
+    const id = Number(req.params.id);
+    const difficulty: unknown = req.body?.difficulty;
+
+    if (!Number.isInteger(id) || (difficulty !== null && difficulty !== 1 && difficulty !== 2 && difficulty !== 3)) {
+        res.status(400).json({ error: 'invalid_difficulty' });
+        return;
+    }
+
+    await db.update(puzzle).set({ initialDifficulty: difficulty }).where(eq(puzzle.id, id));
+
+    res.json({ ok: true });
 });

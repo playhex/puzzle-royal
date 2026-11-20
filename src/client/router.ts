@@ -9,6 +9,8 @@ export const router = createRouter({
         { path: '/replays', name: 'replays', component: () => import('./pages/ReplaysPage.vue') },
         { path: '/replay/:gameId', name: 'replay', component: () => import('./pages/ReplayPage.vue') },
         { path: '/profile/:publicId', name: 'profile', component: () => import('./pages/ProfilePage.vue') },
+        { path: '/admin', name: 'admin', component: () => import('./pages/AdminPage.vue') },
+        { path: '/admin/puzzles/rate/:id?', name: 'admin-puzzles-rate', component: () => import('./pages/AdminRatePuzzlesPage.vue') },
         { path: '/admin/puzzles', name: 'admin-puzzles', component: () => import('./pages/AdminPuzzlesPage.vue') },
     ],
 });

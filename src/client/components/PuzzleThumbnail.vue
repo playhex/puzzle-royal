@@ -7,9 +7,14 @@ const props = withDefaults(defineProps<{
     blueStones: string[];
     lastMove?: null | string;
     solution?: null | string;
+    /** Wrong cell clicked, shown in red outline */
+    wrongCell?: null | string;
     boardsize?: number;
     width?: number;
-}>(), { lastMove: null, solution: null, boardsize: 7, width: 180 });
+    clickable?: boolean;
+}>(), { lastMove: null, solution: null, wrongCell: null, boardsize: 7, width: 180, clickable: false });
+
+const emit = defineEmits<{ cellClick: [move: string] }>();
 
 const R = 10;
 const W = R * Math.sqrt(3);
@@ -51,10 +56,17 @@ const viewHeight = computed(() => (props.boardsize - 1) * 1.5 * R + 3 * R);
 
 <template>
     <svg :width="width" :viewBox="`0 0 ${viewWidth} ${viewHeight}`" class="puzzle-thumb">
-        <polygon v-for="c in cells" :key="c.move" :points="hexPoints(c.x, c.y)" class="cell" />
-        <polygon v-for="c in cells.filter(c => c.color)" :key="'s' + c.move" :points="hexPoints(c.x, c.y, R * 0.8)" :fill="c.color === 'red' ? '#e03131' : '#1c7ed6'" />
-        <circle v-if="mark(lastMove)" :cx="mark(lastMove)!.x" :cy="mark(lastMove)!.y" r="2.5" fill="white" />
-        <polygon v-if="mark(solution)" :points="hexPoints(mark(solution)!.x, mark(solution)!.y, R * 0.8)" fill="none" stroke="#ffd43b" stroke-width="2" />
+        <polygon
+            v-for="c in cells" :key="c.move" :points="hexPoints(c.x, c.y)"
+            :class="['cell', { clickable: clickable && !c.color }]"
+            @click="clickable && !c.color && emit('cellClick', c.move)"
+        />
+        <g pointer-events="none">
+            <polygon v-for="c in cells.filter(c => c.color)" :key="'s' + c.move" :points="hexPoints(c.x, c.y, R * 0.8)" :fill="c.color === 'red' ? '#e03131' : '#1c7ed6'" />
+            <circle v-if="mark(lastMove)" :cx="mark(lastMove)!.x" :cy="mark(lastMove)!.y" r="2.5" fill="white" />
+            <polygon v-if="mark(wrongCell)" :points="hexPoints(mark(wrongCell)!.x, mark(wrongCell)!.y, R * 0.8)" fill="none" stroke="#e03131" stroke-width="2" />
+            <polygon v-if="mark(solution)" :points="hexPoints(mark(solution)!.x, mark(solution)!.y, R * 0.8)" fill="none" stroke="#ffd43b" stroke-width="2" />
+        </g>
     </svg>
 </template>
 
@@ -63,5 +75,13 @@ const viewHeight = computed(() => (props.boardsize - 1) * 1.5 * R + 3 * R);
     fill: var(--bs-secondary-bg);
     stroke: var(--bs-border-color);
     stroke-width: 1;
+}
+
+.cell.clickable {
+    cursor: pointer;
+}
+
+.cell.clickable:hover {
+    fill: var(--bs-tertiary-color);
 }
 </style>

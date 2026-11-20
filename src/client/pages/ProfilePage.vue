@@ -16,7 +16,7 @@ const isMe = computed(() => session.me?.profile.publicId === publicId.value);
         <AppHeader />
         <main class="container py-4" style="max-width: 800px">
             <div v-if="isMe" class="d-flex justify-content-end gap-2 mb-2">
-                <RouterLink v-if="session.me?.isAdmin" to="/admin/puzzles" class="btn btn-sm btn-outline-secondary">Puzzles stats</RouterLink>
+                <RouterLink v-if="session.me?.isAdmin" to="/admin" class="btn btn-sm btn-outline-secondary">Admin</RouterLink>
                 <button class="btn btn-sm btn-outline-secondary" @click="session.logout()">Log out</button>
             </div>
 

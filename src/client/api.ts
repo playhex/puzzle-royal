@@ -2,6 +2,20 @@ import type { BoardSettings } from '../shared/boardSettings.js';
 import type { PlayerProfile } from '../shared/profile.js';
 import type { ReplayData } from './game/ReplayModel.js';
 
+const post = async <T>(url: string, body: unknown): Promise<T> => {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+        throw new Error(`${url}: ${response.status}`);
+    }
+
+    return response.json() as Promise<T>;
+};
+
 const get = async <T>(url: string): Promise<T> => {
     const response = await fetch(url, { headers: { Accept: 'application/json' } });
 
@@ -43,9 +57,15 @@ export type PlayerStats = {
     games: (RecentGame & { place: number })[];
 };
 
+/** 1 easy, 2 medium, 3 hard */
+export type Difficulty = 1 | 2 | 3;
+
+export type AdminPuzzleData = { id: number; redStones: string[]; blueStones: string[]; lastMove: null | string; solution: string };
+
 export type AdminPuzzle = {
     id: number;
-    puzzle: { redStones: string[]; blueStones: string[]; lastMove: null | string; solution: string };
+    puzzle: AdminPuzzleData;
+    initialDifficulty: null | Difficulty;
     timesShown: number;
     playersPresent: number;
     roundsWithElimination: number;
@@ -65,7 +85,11 @@ export const api = {
     puzzlesCount: async () => (await get<{ count: number }>('/api/puzzles/count')).count,
     game: (gameId: string) => get<ReplayData>(`/api/games/${encodeURIComponent(gameId)}`),
     playerStats: (publicId: string) => get<PlayerStats>(`/api/players/${encodeURIComponent(publicId)}/stats`),
+    adminCheck: () => get<{ ok: true }>('/api/admin/check'),
     adminPuzzles: () => get<AdminPuzzle[]>('/api/admin/puzzles'),
+    adminNextUnratedPuzzle: (after = 0) => get<{ puzzle: null | (AdminPuzzleData & { initialDifficulty: null | Difficulty }); remaining: number }>(`/api/admin/puzzles/unrated/next?after=${after}`),
+    adminPuzzle: (id: number) => get<{ puzzle: AdminPuzzleData & { initialDifficulty: null | Difficulty }; remaining: number }>(`/api/admin/puzzles/${id}`),
+    adminSetInitialDifficulty: (id: number, difficulty: null | Difficulty) => post<{ ok: true }>(`/api/admin/puzzles/${id}/initial-difficulty`, { difficulty }),
     logout: () => fetch('/logout', { method: 'POST' }),
 };
 

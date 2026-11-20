@@ -16,6 +16,7 @@ onMounted(async () => {
 });
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
+const difficultyLabel = (d: null | number) => d === null ? '-' : ['', 'Easy', 'Medium', 'Hard'][d];
 const round = (v: null | number) => v === null ? '-' : Math.round(v);
 </script>
 
@@ -30,7 +31,7 @@ const round = (v: null | number) => v === null ? '-' : Math.round(v);
             <table class="table table-sm align-middle">
                 <thead>
                     <tr>
-                        <th>Puzzle</th><th>Elim. rate</th><th>Shown</th><th>Present</th><th>Eliminated</th>
+                        <th>Puzzle</th><th>Initial diff.</th><th>Elim. rate</th><th>Shown</th><th>Present</th><th>Eliminated</th>
                         <th>Rounds w/ elim.</th><th>All fell</th><th>None fell</th><th>Avg reach</th>
                         <th>Most wrong cell</th><th>Avg rating elim. / surv.</th>
                     </tr>
@@ -41,6 +42,7 @@ const round = (v: null | number) => v === null ? '-' : Math.round(v);
                             <PuzzleThumbnail v-bind="p.puzzle" :width="150" />
                             <div class="small text-body-secondary">#{{ p.id }}</div>
                         </td>
+                        <td>{{ difficultyLabel(p.initialDifficulty) }}</td>
                         <td class="fw-bold">{{ pct(p.eliminationRate) }}</td>
                         <td>{{ p.timesShown }}</td>
                         <td>{{ p.playersPresent }}</td>

@@ -9,7 +9,7 @@ const BOARDSIZE = 7;
  * Always 7x7, red to play and win in one move.
  *
  * [
- *     { "redStones": "a7 b3 c3 c5 d5 e3 e4", "blueStones": "b6 c6 d2 d3 d4 d6 e5 f6", "lastMove": "b6", "solution": "a6" }
+ *     { "redStones": "a7 b3 c3 c5 d5 e3 e4", "blueStones": "b6 c6 d2 d3 d4 d6 e5 f6", "lastMove": "b6", "solution": "a6", "initialDifficulty": 2 }
  * ]
  */
 export type PuzzleFile = {
@@ -24,6 +24,9 @@ export type PuzzleFile = {
 
     /** The only winning move for red */
     solution: string;
+
+    /** 1 easy, 2 medium, 3 hard. Omitted when not yet rated */
+    initialDifficulty?: 1 | 2 | 3;
 };
 
 export class PuzzleFileError extends Error {}
@@ -87,10 +90,17 @@ export const parsePuzzleFile = (input: unknown): PuzzleFile => {
         throw new PuzzleFileError(`solution ${solution} is not an empty cell`);
     }
 
+    const { initialDifficulty } = file;
+
+    if (initialDifficulty !== undefined && initialDifficulty !== null && initialDifficulty !== 1 && initialDifficulty !== 2 && initialDifficulty !== 3) {
+        throw new PuzzleFileError(`initialDifficulty: expected 1, 2 or 3, got "${String(initialDifficulty)}"`);
+    }
+
     return {
         redStones: normalizeStones(red),
         blueStones: normalizeStones(blue),
         lastMove,
         solution,
+        ...(typeof initialDifficulty === 'number' ? { initialDifficulty } : {}),
     };
 };

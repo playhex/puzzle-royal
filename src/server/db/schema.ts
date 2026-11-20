@@ -12,10 +12,15 @@ export const puzzle = mysqlTable('puzzle', {
     blueStones: varchar('blue_stones', { length: 255 }).notNull(),
     lastMove: varchar('last_move', { length: 4 }),
     solution: varchar('solution', { length: 4 }).notNull(),
+
+    /** Difficulty set by an admin after import: 1 easy, 2 medium, 3 hard. null when not yet rated */
+    initialDifficulty: tinyint('initial_difficulty'),
+
     importedAt: datetime('imported_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 }, t => [
     /** Stones are sorted on import, so a same position is never imported twice */
     unique('puzzle_position_unq').on(t.redStones, t.blueStones),
+    index('puzzle_initial_difficulty_idx').on(t.initialDifficulty),
 ]);
 
 /**

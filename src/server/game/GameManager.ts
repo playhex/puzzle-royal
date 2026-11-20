@@ -7,7 +7,7 @@ import type { PlayerProfile } from '../../shared/profile.js';
 import { serverNow } from '../clock.js';
 import { WaitingRoom } from '../lobby/WaitingRoom.js';
 import { GameServer, type GameRecord } from './GameServer.js';
-import { pickRandomPuzzles } from './puzzleProvider.js';
+import { pickGameStartPuzzles, pickRandomPuzzles } from './puzzleProvider.js';
 import { saveGame } from './GameRecorder.js';
 
 export type SocketData = {
@@ -215,7 +215,7 @@ export class GameManager {
     private async startGame(): Promise<void> {
         this.starting = true;
 
-        const puzzles = await pickRandomPuzzles(PUZZLES_PRELOAD);
+        const puzzles = await pickGameStartPuzzles(PUZZLES_PRELOAD);
 
         if (puzzles.length === 0) {
             throw new Error('No puzzle in database, run pnpm puzzles:import');

@@ -52,6 +52,14 @@ pnpm puzzles:import [file]
 
 Imports a json file containing a list of puzzles, defaults to `fixtures/puzzles.json` (50 example puzzles).
 Only new positions are added: running it again never duplicates puzzles nor resets their stats.
+For already imported positions, only `initialDifficulty` is updated, when present in the file.
+
+``` bash
+pnpm puzzles:export [file]
+```
+
+Exports all puzzles with their initial difficulty (1 easy, 2 medium, 3 hard), importable with `puzzles:import`.
+`initialDifficulty` is omitted for puzzles not yet rated. Prints to stdout when no file given.
 
 7x7 puzzles, red to play and win in one move:
 

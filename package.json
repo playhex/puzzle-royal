@@ -19,6 +19,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/server/commands/migrate.ts",
     "puzzles:import": "tsx --env-file-if-exists=.env src/server/commands/import-puzzles.ts",
+    "puzzles:export": "tsx --env-file-if-exists=.env src/server/commands/export-puzzles.ts",
     "puzzles:stats": "tsx --env-file-if-exists=.env src/server/commands/puzzle-stats.ts"
   },
   "dependencies": {
