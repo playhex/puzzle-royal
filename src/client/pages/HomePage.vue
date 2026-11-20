@@ -46,11 +46,11 @@ onMounted(async () => {
                 </aside>
 
                 <div class="buttons d-flex flex-column gap-4">
-                    <button class="btn btn-lg btn-primary" @click="play">{{ playLabel }}</button>
+                    <button class="btn btn-lg btn-success" @click="play">{{ playLabel }}</button>
                     <div class="d-flex flex-column gap-2">
-                        <RouterLink to="/tutorial" class="btn btn-outline-secondary">Tutorial</RouterLink>
-                        <RouterLink to="/leaderboard" class="btn btn-outline-secondary">Leaderboard</RouterLink>
-                        <RouterLink v-if="hasReplays" to="/replays" class="btn btn-outline-secondary">Replays</RouterLink>
+                        <RouterLink to="/tutorial" class="btn btn-outline-info">Tutorial</RouterLink>
+                        <RouterLink to="/leaderboard" class="btn btn-outline-warning">Leaderboard</RouterLink>
+                        <RouterLink v-if="hasReplays" to="/replays" class="btn btn-outline-primary">Replays</RouterLink>
                     </div>
                 </div>
 
