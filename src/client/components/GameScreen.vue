@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive } from 'vue';
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import type { BoardSettings } from '../../shared/boardSettings.js';
 import type { PlayerProfile } from '../../shared/profile.js';
 import { getPhaseAt, getRoundTimes } from '../../shared/simulation/GameSimulation.js';
@@ -20,13 +20,14 @@ const emit = defineEmits<{ selectPlayer: [idx: number] }>();
 
 type Row = { idx: number; profile: PlayerProfile; color: string; eliminated: boolean; me: boolean };
 
+/*
+ * Updated each frame: only assign values that changed at display precision,
+ * so that the template is not re-rendered each frame.
+ */
 const hud = reactive({
     started: false,
-    startsInMs: 0,
-    roundIndex: 0,
-    phase: 'appear' as string,
-    remainingMs: 0,
-    playMs: 1,
+    startsInSeconds: 0,
+    urgent: false,
     countdown: null as null | number,
     rows: [] as Row[],
     fallen: null as null | { place: number; round: number; fresh: boolean },
@@ -48,18 +49,64 @@ const update = () => {
         : getPhaseAt(display.config, t);
 
     hud.started = t >= 0;
-    hud.startsInMs = Math.max(0, -t);
+    hud.startsInSeconds = Math.ceil(Math.max(0, -t) / 1000);
 
     if (phase) {
-        hud.roundIndex = phase.roundIndex;
-        hud.phase = phase.phase;
-        hud.playMs = display.config.playMs;
-        hud.remainingMs = phase.phase === 'play' ? phase.times.dropAt - t : phase.phase === 'appear' ? display.config.playMs : 0;
-        hud.countdown = phase.phase === 'play' && hud.remainingMs <= 3000 ? Math.ceil(hud.remainingMs / 1000) : null;
+        const remainingMs = phase.phase === 'play' ? phase.times.dropAt - t : phase.phase === 'appear' ? display.config.playMs : 0;
+        const ratio = phase.phase === 'drop' ? 0 : Math.max(0, remainingMs / display.config.playMs);
+
+        hud.urgent = remainingMs <= 3000;
+        hud.countdown = phase.phase === 'play' && remainingMs <= 3000 ? Math.ceil(remainingMs / 1000) : null;
+
+        // Direct style update, compositor only, no Vue render nor layout
+        if (timebarFill.value && ratio !== lastRatio) {
+            timebarFill.value.style.transform = `scaleX(${ratio})`;
+            lastRatio = ratio;
+        }
     }
 
     const eliminated = display.players.map((_, idx) => isEliminatedAt(display, idx, t));
+    const rowsKey = eliminated.map(e => e ? 1 : 0).join('') + sim.eliminatedRound.join() + display.myIdx;
 
+    if (rowsKey !== lastRowsKey) {
+        lastRowsKey = rowsKey;
+        updateRows(display, eliminated);
+    }
+
+    const me = display.myIdx;
+
+    if (display.isMe && me !== null && eliminated[me]) {
+        const round = sim.eliminatedRound[me]!;
+        const place = sim.places[me] ?? 0;
+        const fresh = t < getRoundTimes(display.config, round).endAt + 2500;
+        const f = hud.fallen;
+
+        if (!f || f.place !== place || f.round !== round + 1 || f.fresh !== fresh) {
+            hud.fallen = { place, round: round + 1, fresh };
+        }
+    } else {
+        hud.fallen = null;
+    }
+
+    hud.over = isOverAt(display, t);
+    hud.myPlace = display.isMe && me !== null ? sim.places[me] : null;
+    hud.roundsCount = sim.results.length;
+
+    const winnersKey = sim.places.join();
+
+    if (winnersKey !== lastWinnersKey) {
+        lastWinnersKey = winnersKey;
+        hud.winners = display.players.filter((_, idx) => sim.places[idx] === 1).map(p => p.profile);
+    }
+};
+
+const timebarFill = ref<HTMLElement>();
+let lastRatio = -1;
+let lastRowsKey = '';
+let lastWinnersKey = '';
+
+const updateRows = (display: GameDisplay, eliminated: boolean[]) => {
+    const sim = display.simulation;
     const rows: Row[] = display.players.map((p, idx) => ({
         idx,
         profile: p.profile,
@@ -77,25 +124,6 @@ const update = () => {
     });
 
     hud.rows = rows;
-
-    const me = display.myIdx;
-
-    if (display.isMe && me !== null && eliminated[me]) {
-        const round = sim.eliminatedRound[me]!;
-
-        hud.fallen = {
-            place: sim.places[me] ?? 0,
-            round: round + 1,
-            fresh: t < getRoundTimes(display.config, round).endAt + 2500,
-        };
-    } else {
-        hud.fallen = null;
-    }
-
-    hud.over = isOverAt(display, t);
-    hud.myPlace = display.isMe && me !== null ? sim.places[me] : null;
-    hud.winners = display.players.filter((_, idx) => sim.places[idx] === 1).map(p => p.profile);
-    hud.roundsCount = sim.results.length;
 };
 
 let frame = 0;
@@ -116,16 +144,12 @@ const ordinal = (n: number) => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10
             <BoardCanvas :display="display" :settings="settings" />
 
             <div class="timebar">
-                <div
-                    class="timebar-fill"
-                    :class="{ urgent: hud.remainingMs <= 3000 }"
-                    :style="{ width: (hud.phase === 'drop' ? 0 : Math.max(0, hud.remainingMs / hud.playMs) * 100) + '%' }"
-                />
+                <div ref="timebarFill" class="timebar-fill" :class="{ urgent: hud.urgent }" />
             </div>
 
             <div v-if="!hud.started" class="center-message">
                 <div class="fs-4">Get ready</div>
-                <div class="display-3 fw-bold">{{ Math.ceil(hud.startsInMs / 1000) }}</div>
+                <div class="display-3 fw-bold">{{ hud.startsInSeconds }}</div>
             </div>
 
             <div v-else-if="hud.countdown !== null && !hud.over" :key="hud.countdown" class="countdown">{{ hud.countdown }}</div>
@@ -176,7 +200,7 @@ const ordinal = (n: number) => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10
 
         <PlayerIconsBar
             class="mobile-only"
-            :players="hud.rows.map(r => ({ idx: r.idx, profile: r.profile, eliminated: r.eliminated, me: r.me }))"
+            :players="hud.rows"
         />
     </div>
 </template>
@@ -245,6 +269,9 @@ const ordinal = (n: number) => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10
 .timebar-fill {
     height: 100%;
     background: #37b24d;
+    transform-origin: left;
+    transform: scaleX(0);
+    will-change: transform;
 }
 
 .timebar-fill.urgent {

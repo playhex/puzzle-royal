@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, type Texture } from 'pixi.js';
+import { Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
 import { Hex, type BoardRenderContext, type BoardRenderer, type BoardView, type GameView } from '@playhex/pixi-board';
 
 export type CellAppearance = {
@@ -12,11 +12,18 @@ export type CellAppearance = {
 
 const identity: CellAppearance = { scale: 1, alpha: 1, offsetX: 0, offsetY: 0 };
 
+/** Cells slightly overlap to avoid seams between them */
+const CELL_RADIUS = Hex.RADIUS + 0.2;
+
+/** One cell slot in the atlas texture: hexagon bounding box (pointy top), plus margin */
+const SLOT_W = Math.ceil(CELL_RADIUS * Math.sqrt(3)) + 4;
+const SLOT_H = Math.ceil(CELL_RADIUS * 2) + 4;
+
 const hexagon = (g: Graphics, x: number, y: number): Graphics => {
     const points = [];
 
     for (let i = 0; i < 6; ++i) {
-        const c = Hex.cornerCoords(i, Hex.RADIUS + 0.2);
+        const c = Hex.cornerCoords(i, CELL_RADIUS);
 
         points.push(x + c.x, y + c.y);
     }
@@ -27,9 +34,8 @@ const hexagon = (g: Graphics, x: number, y: number): Graphics => {
 type Drawn = {
     innerView: BoardView;
     cellsLayer: Container;
-    cells: Container[][];
-    sprites: Sprite[];
-    texture: null | Texture;
+    cells: Sprite[][];
+    atlas: null | Texture;
     boardsize: number;
 };
 
@@ -38,13 +44,14 @@ type Drawn = {
  * without modifying @playhex/pixi-board:
  *
  * - original board is rendered (without sides) into a texture,
- * - cut into one hexagon sprite per cell,
+ * - cut into hexagons, laid out in an atlas texture, one sprite per cell.
+ *   No mask is rendered each frame, and all cells are drawn in a single batch,
  * - original board stays displayed outside cells (inverse mask), so sides and their highlight still work,
  * - shading changes are forwarded to original board, and texture is regenerated.
  */
 export class AnimatedCellsBoard {
     private drawn: null | Drawn = null;
-    private appearances = new Map<string, CellAppearance>();
+    private appearances = new Map<number, CellAppearance>();
     private regenerateScheduled = false;
 
     constructor(private gameView: GameView) {
@@ -61,7 +68,7 @@ export class AnimatedCellsBoard {
     }
 
     setCell(row: number, col: number, appearance: CellAppearance): void {
-        this.appearances.set(`${row},${col}`, appearance);
+        this.appearances.set(row * 1000 + col, appearance);
 
         const cell = this.drawn?.cells[row]?.[col];
 
@@ -75,7 +82,7 @@ export class AnimatedCellsBoard {
         this.drawn?.cells.forEach((line, row) => line.forEach((cell, col) => this.applyAppearance(cell, row, col, identity)));
     }
 
-    private applyAppearance(cell: Container, row: number, col: number, a: CellAppearance): void {
+    private applyAppearance(cell: Sprite, row: number, col: number, a: CellAppearance): void {
         const base = Hex.coords(row, col);
 
         cell.position.set(base.x + a.offsetX, base.y + a.offsetY);
@@ -96,7 +103,7 @@ export class AnimatedCellsBoard {
         const innerView = inner(ctx);
 
         // Previous container is destroyed by GameView, not its texture
-        this.drawn?.texture?.destroy(true);
+        this.drawn?.atlas?.destroy(true);
         this.drawn = null;
 
         if (!this.isPixiReady()) {
@@ -120,27 +127,21 @@ export class AnimatedCellsBoard {
         sidesHolder.setMask({ mask: cellsMask, inverse: true });
         container.addChild(sidesHolder, cellsMask, cellsLayer);
 
-        const cells: Container[][] = [];
-        const sprites: Sprite[] = [];
+        const cells: Sprite[][] = [];
 
         for (let row = 0; row < ctx.boardsize; ++row) {
             cells[row] = [];
 
             for (let col = 0; col < ctx.boardsize; ++col) {
-                const cell = new Container();
-                const sprite = new Sprite();
-                const mask = hexagon(new Graphics(), 0, 0);
+                const cell = new Sprite({ anchor: 0.5 });
 
-                cell.addChild(sprite, mask);
-                sprite.mask = mask;
                 cellsLayer.addChild(cell);
                 cells[row][col] = cell;
-                sprites.push(sprite);
-                this.applyAppearance(cell, row, col, this.appearances.get(`${row},${col}`) ?? identity);
+                this.applyAppearance(cell, row, col, this.appearances.get(row * 1000 + col) ?? identity);
             }
         }
 
-        this.drawn = { innerView, cellsLayer, cells, sprites, texture: null, boardsize: ctx.boardsize };
+        this.drawn = { innerView, cellsLayer, cells, atlas: null, boardsize: ctx.boardsize };
         this.regenerateTexture();
 
         return {
@@ -167,7 +168,8 @@ export class AnimatedCellsBoard {
     }
 
     /**
-     * Render original board into a texture, at current display scale to stay sharp.
+     * Render original board into a texture, at current display scale to stay sharp,
+     * then cut it into an atlas of hexagons, one per cell.
      */
     private regenerateTexture(): void {
         const drawn = this.drawn;
@@ -182,28 +184,54 @@ export class AnimatedCellsBoard {
         const sidesVisible = sides.map(s => s.visible);
         const wt = drawn.cellsLayer.worldTransform;
         const displayScale = Math.hypot(wt.a, wt.b) || 1;
-        const resolution = Math.min(4, Math.max(1, displayScale * (window.devicePixelRatio || 1)));
+        const resolution = Math.min(4, Math.max(1, displayScale * renderer.resolution));
+        const { boardsize } = drawn;
 
         sides.forEach(s => s.visible = false);
 
         const bounds = target.getLocalBounds();
-        const texture = renderer.generateTexture({ target, resolution, antialias: true });
+        const boardTexture = renderer.generateTexture({ target, resolution, antialias: true });
 
         sides.forEach((s, i) => s.visible = sidesVisible[i]);
 
-        let i = 0;
+        // Masks are rendered only here, once, not each frame
+        const atlasContent = new Container();
 
-        for (let row = 0; row < drawn.boardsize; ++row) {
-            for (let col = 0; col < drawn.boardsize; ++col) {
-                const sprite = drawn.sprites[i++];
+        for (let row = 0; row < boardsize; ++row) {
+            for (let col = 0; col < boardsize; ++col) {
                 const { x, y } = Hex.coords(row, col);
+                const slot = new Container();
+                const sprite = new Sprite(boardTexture);
+                const mask = hexagon(new Graphics(), 0, 0);
 
-                sprite.texture = texture;
+                slot.position.set(col * SLOT_W + SLOT_W / 2, row * SLOT_H + SLOT_H / 2);
                 sprite.position.set(bounds.x - x, bounds.y - y);
+                sprite.mask = mask;
+                slot.addChild(sprite, mask);
+                atlasContent.addChild(slot);
             }
         }
 
-        drawn.texture?.destroy(true);
-        drawn.texture = texture;
+        const atlas = renderer.generateTexture({
+            target: atlasContent,
+            frame: new Rectangle(0, 0, boardsize * SLOT_W, boardsize * SLOT_H),
+            resolution,
+            antialias: true,
+        });
+
+        atlasContent.destroy({ children: true });
+        boardTexture.destroy(true);
+
+        for (let row = 0; row < boardsize; ++row) {
+            for (let col = 0; col < boardsize; ++col) {
+                drawn.cells[row][col].texture = new Texture({
+                    source: atlas.source,
+                    frame: new Rectangle(col * SLOT_W, row * SLOT_H, SLOT_W, SLOT_H),
+                });
+            }
+        }
+
+        drawn.atlas?.destroy(true);
+        drawn.atlas = atlas;
     }
 }

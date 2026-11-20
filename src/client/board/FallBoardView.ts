@@ -16,7 +16,10 @@ import { GraphicsEntity, PlayerDot } from './PlayerDot.js';
 /** Board local pixels for one simulation cell unit */
 const CELL_PX = Hex.RADIUS * Math.sqrt(3);
 
-const GROUP_HIGHLIGHT = 'hexfall_highlight';
+/** Max canvas pixels per CSS pixel */
+const MAX_RESOLUTION = 2;
+
+const GROUP_HIGHLIGHT ='hexfall_highlight';
 const GROUP_MARKS = 'hexfall_marks';
 const GROUP_TARGETS = 'hexfall_targets';
 const GROUP_PLAYERS = 'hexfall_players';
@@ -37,6 +40,16 @@ const cellNoise = (move: Move): number => {
 };
 
 const identity: CellAppearance = { scale: 1, alpha: 1, offsetX: 0, offsetY: 0 };
+
+/** Per cell constants, computed once */
+type CellInfo = {
+    row: number;
+    col: number;
+    move: Move;
+    x: number;
+    y: number;
+    noise: number;
+};
 
 export const getThemeDefinition = (settings: BoardSettings): ThemeDefinition => {
     if (settings.boardTheme === 'custom' && settings.customBoardTheme) {
@@ -69,6 +82,15 @@ export class FallBoardView {
     private solutionStone: null | Move = null;
     private lastMoveMark: null | LastMoveMark = null;
     private highlight = new Graphics();
+    private highlightedCell: null | Move = null;
+    private cellInfos: CellInfo[];
+    private cellInfoByMove = new Map<Move, CellInfo>();
+
+    /** Appearance of each cell for current frame, same index as cellInfos */
+    private appearances: CellAppearance[] = [];
+
+    /** Appear animation delay of each cell for shownRound, same index as cellInfos */
+    private appearDelays: number[] = [];
     private targetLine = new Graphics();
     private dots: PlayerDot[] = [];
     private dotsPlayersKey = '';
@@ -79,6 +101,18 @@ export class FallBoardView {
 
     constructor(boardsize: number) {
         this.gameView = new GameView(boardsize, { displayCoords: false });
+        this.cellInfos = [];
+
+        for (let row = 0; row < boardsize; ++row) {
+            for (let col = 0; col < boardsize; ++col) {
+                const move = coordsToMove({ row, col });
+                const info: CellInfo = { row, col, move, ...Hex.coords(row, col), noise: cellNoise(move) };
+
+                this.cellInfos.push(info);
+                this.cellInfoByMove.set(move, info);
+            }
+        }
+
         this.animatedCells = new AnimatedCellsBoard(this.gameView);
         this.anchor44 = new Anchor44Facade(this.gameView, false);
         this.shading = new ShadingPatternFacade(this.gameView);
@@ -98,6 +132,12 @@ export class FallBoardView {
         this.mounted = true;
 
         const app = this.gameView.getPixiApp();
+
+        // pixi-board renders at ceil(devicePixelRatio), so 3x on most phones, with antialias:
+        // too many pixels to fill each frame. 2x is visually the same at phone sizes.
+        if (app.renderer.resolution > MAX_RESOLUTION) {
+            app.renderer.resolution = MAX_RESOLUTION;
+        }
 
         app.canvas.style.touchAction = 'none';
         app.stage.eventMode = 'static';
@@ -195,6 +235,12 @@ export class FallBoardView {
         }
 
         this.highlight.clear();
+        this.highlightedCell = null;
+
+        const origin = round.origin ?? boardCenterMove(this.gameView.getBoardsize());
+        const appearMs = round.times.playAt - round.times.appearAt;
+
+        this.appearDelays = this.cellInfos.map(info => cellDistance(origin, info.move) / 12 * appearMs * 0.6);
         this.shownRound = round;
     }
 
@@ -227,18 +273,20 @@ export class FallBoardView {
     /**
      * Appearance of a cell at time t of a round.
      */
-    private cellAppearance(move: Move, round: LiveRound, t: number): CellAppearance {
+    private cellAppearance(i: number, round: LiveRound, t: number): CellAppearance {
         const { appearAt, playAt, dropAt } = round.times;
-        const appearMs = playAt - appearAt;
-        const origin = round.origin ?? boardCenterMove(this.gameView.getBoardsize());
+        const { move, noise } = this.cellInfos[i];
 
         if (t < playAt) {
-            if (move === origin && round.origin !== null) {
+            if (move === round.origin) {
                 return identity;
             }
 
-            const delay = cellDistance(origin, move) / 12 * appearMs * 0.6;
-            const p = clamp01((t - appearAt - delay) / (appearMs * 0.4));
+            const p = clamp01((t - appearAt - this.appearDelays[i]) / ((playAt - appearAt) * 0.4));
+
+            if (p >= 1) {
+                return identity;
+            }
 
             return { scale: easeOutBack(p), alpha: clamp01(p * 1.5), offsetX: 0, offsetY: 0 };
         }
@@ -247,7 +295,7 @@ export class FallBoardView {
             return identity;
         }
 
-        return this.fallAppearance(t - dropAt - cellNoise(move) * 250);
+        return this.fallAppearance(t - dropAt - noise * 250);
     }
 
     private fallAppearance(elapsed: number): CellAppearance {
@@ -264,7 +312,7 @@ export class FallBoardView {
     }
 
     private applyToEntity(entity: { position: { set: (x: number, y: number) => void }; scale: { set: (s: number) => void }; alpha: number; visible: boolean }, move: Move, a: CellAppearance): void {
-        const base = Hex.coords(parseMove(move).row, parseMove(move).col);
+        const base = this.cellInfoByMove.get(move)!;
 
         entity.position.set(base.x + a.offsetX, base.y + a.offsetY);
         entity.scale.set(a.scale);
@@ -310,31 +358,33 @@ export class FallBoardView {
 
         this.shownRound = round;
 
-        const boardsize = this.gameView.getBoardsize();
-        const appearances = new Map<Move, CellAppearance>();
+        const appearances = this.appearances;
 
-        for (let row = 0; row < boardsize; ++row) {
-            for (let col = 0; col < boardsize; ++col) {
-                const move = coordsToMove({ row, col });
-                const a = this.cellAppearance(move, round, roundT);
+        this.cellInfos.forEach((info, i) => {
+            const a = this.cellAppearance(i, round, roundT);
 
-                appearances.set(move, a);
-                this.animatedCells.setCell(row, col, a);
-            }
-        }
+            appearances[i] = a;
+            this.animatedCells.setCell(info.row, info.col, a);
+        });
 
         for (const move of this.stones) {
             const stone = this.gameView.getStone(move);
 
-            if (stone) this.applyToEntity(stone, move, appearances.get(move)!);
+            if (stone) this.applyToEntity(stone, move, this.appearanceOf(move));
         }
 
         if (this.lastMoveMark && round.puzzle.lastMove) {
-            this.applyToEntity(this.lastMoveMark, round.puzzle.lastMove, appearances.get(round.puzzle.lastMove)!);
+            this.applyToEntity(this.lastMoveMark, round.puzzle.lastMove, this.appearanceOf(round.puzzle.lastMove));
         }
 
         this.renderSolution(round, roundT);
-        this.renderDots(display, round, roundT, t, appearances, dt);
+        this.renderDots(display, round, roundT, t, dt);
+    }
+
+    private appearanceOf(move: Move): CellAppearance {
+        const { row, col } = this.cellInfoByMove.get(move)!;
+
+        return this.appearances[row * this.gameView.getBoardsize() + col] ?? identity;
     }
 
     private renderPreStart(display: GameDisplay): void {
@@ -357,9 +407,8 @@ export class FallBoardView {
     }
 
     private renderSolution(round: LiveRound, t: number): void {
-        this.highlight.clear();
-
         if (!round.solution || t < round.times.dropAt) {
+            this.highlight.visible = false;
             return;
         }
 
@@ -368,21 +417,26 @@ export class FallBoardView {
             this.gameView.setStone(round.solution, 0);
         }
 
-        const { row, col } = parseMove(round.solution);
-        const c = Hex.coords(row, col);
-        const pulse = 0.6 + 0.4 * Math.sin((t - round.times.dropAt) / 120);
-        const points: number[] = [];
+        // Drawn once, then only its alpha pulses
+        if (this.highlightedCell !== round.solution) {
+            const c = this.cellInfoByMove.get(round.solution)!;
+            const points: number[] = [];
 
-        for (let i = 0; i < 6; ++i) {
-            const corner = Hex.cornerCoords(i, Hex.RADIUS * 0.98);
+            for (let i = 0; i < 6; ++i) {
+                const corner = Hex.cornerCoords(i, Hex.RADIUS * 0.98);
 
-            points.push(c.x + corner.x, c.y + corner.y);
+                points.push(c.x + corner.x, c.y + corner.y);
+            }
+
+            this.highlight.clear().poly(points).stroke({ color: 0xffd43b, width: 3.5 });
+            this.highlightedCell = round.solution;
         }
 
-        this.highlight.poly(points).stroke({ color: 0xffd43b, width: 3.5, alpha: pulse });
+        this.highlight.visible = true;
+        this.highlight.alpha = 0.6 + 0.4 * Math.sin((t - round.times.dropAt) / 120);
     }
 
-    private renderDots(display: GameDisplay, round: LiveRound, roundT: number, t: number, appearances: Map<Move, CellAppearance>, dt: number): void {
+    private renderDots(display: GameDisplay, round: LiveRound, roundT: number, t: number, dt: number): void {
         const sim = display.simulation;
         const boardsize = this.gameView.getBoardsize();
         // Smooths other dots corrections (resyncs), short to stay responsive.
@@ -418,7 +472,7 @@ export class FallBoardView {
             if (eliminatedRound === round.roundIndex && isEliminatedAt(display, idx, roundT)) {
                 const cell = cellAt({ x: pos.x / CELL_PX * UNIT, y: pos.y / CELL_PX * UNIT }, boardsize);
 
-                fall = cell ? appearances.get(cell) ?? identity : this.fallAppearance(roundT - round.times.dropAt);
+                fall = cell ? this.appearanceOf(cell) : this.fallAppearance(roundT - round.times.dropAt);
             }
 
             dot.position.set(pos.x + fall.offsetX, pos.y + fall.offsetY);
