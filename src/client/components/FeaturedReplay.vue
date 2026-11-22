@@ -6,7 +6,7 @@ import { useSessionStore } from '../stores/session.js';
 import BoardCanvas from './BoardCanvas.vue';
 
 /**
- * Recent game with most players and rounds, replayed in loop.
+ * Best game (players² × rounds), replayed in loop.
  */
 const session = useSessionStore();
 const model = shallowRef<null | ReplayModel>(null);

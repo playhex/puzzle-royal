@@ -64,19 +64,41 @@ const toRecentGames = async (games: (typeof replayGame.$inferSelect)[]) => {
     }));
 };
 
-apiRouter.get('/games/recent', async (_req, res) => {
-    const games = await db.select().from(replayGame).orderBy(desc(replayGame.endedAt)).limit(20);
+const GAMES_SORT_COLUMNS = {
+    endedAt: replayGame.endedAt,
+    playersCount: replayGame.playersCount,
+    roundsCount: replayGame.roundsCount,
+} as const;
 
-    res.json(await toRecentGames(games));
+const GAMES_PAGE_MAX = 50;
+
+/**
+ * Paginated games, ?sort=endedAt|playersCount|roundsCount&order=asc|desc&offset=0&limit=20
+ */
+apiRouter.get('/games/recent', async (req, res) => {
+    const sortKey = String(req.query.sort) as keyof typeof GAMES_SORT_COLUMNS;
+    const column = GAMES_SORT_COLUMNS[sortKey] ?? replayGame.endedAt;
+    const dir = req.query.order === 'asc' ? asc : desc;
+    const offset = Math.max(0, Math.floor(Number(req.query.offset)) || 0);
+    const limit = Math.min(GAMES_PAGE_MAX, Math.max(1, Math.floor(Number(req.query.limit)) || 20));
+
+    // Fetch one more to know if there is a next page, id keeps order stable across pages
+    const games = await db.select().from(replayGame)
+        .orderBy(dir(column), dir(replayGame.id))
+        .limit(limit + 1).offset(offset);
+
+    res.json({
+        games: await toRecentGames(games.slice(0, limit)),
+        hasMore: games.length > limit,
+    });
 });
 
 /**
- * Among recent games, the 5 with most players, then most rounds.
+ * Best games, scored by players² × rounds, date ignored.
  */
 apiRouter.get('/games/featured', async (_req, res) => {
-    const recent = db.select().from(replayGame).orderBy(desc(replayGame.endedAt)).limit(30).as('recent');
-    const games = await db.select().from(recent)
-        .orderBy(desc(recent.playersCount), desc(recent.roundsCount), desc(recent.endedAt))
+    const games = await db.select().from(replayGame)
+        .orderBy(desc(sql`${replayGame.playersCount} * ${replayGame.playersCount} * ${replayGame.roundsCount}`), desc(replayGame.endedAt))
         .limit(5);
 
     res.json(await toRecentGames(games));

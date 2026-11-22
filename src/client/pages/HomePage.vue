@@ -18,7 +18,7 @@ const medals = ['🥇', '🥈', '🥉'];
 onMounted(async () => {
     api.leaderboard().then(l => topPlayers.value = l.slice(0, 5).map(p => p.player)).catch(() => {});
     api.puzzlesCount().then(n => puzzlesCount.value = n).catch(() => {});
-    hasReplays.value = (await api.recentGames().catch(() => [])).length > 0;
+    hasReplays.value = ((await api.recentGames('endedAt', 'desc', 0, 1).catch(() => null))?.games.length ?? 0) > 0;
 });
 </script>
 

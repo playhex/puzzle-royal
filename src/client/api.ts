@@ -57,6 +57,10 @@ export type PlayerStats = {
     games: (RecentGame & { place: number })[];
 };
 
+export type GamesSort = 'endedAt' | 'playersCount' | 'roundsCount';
+
+export type GamesPage = { games: RecentGame[]; hasMore: boolean };
+
 /** Top 50 of the last 365 days, by opponents outlasted then fewer games played */
 export type Leaderboard = { player: PlayerProfile; wins: number; gamesPlayed: number; opponentsSurvived: number }[];
 
@@ -86,7 +90,8 @@ export const api = {
     me: () => get<null | Me>('/api/me'),
     leaderboard: () => get<Leaderboard>('/api/leaderboard'),
     featuredGames: () => get<RecentGame[]>('/api/games/featured'),
-    recentGames: () => get<RecentGame[]>('/api/games/recent'),
+    recentGames: (sort: GamesSort = 'endedAt', order: 'asc' | 'desc' = 'desc', offset = 0, limit = 20) =>
+        get<GamesPage>(`/api/games/recent?sort=${sort}&order=${order}&offset=${offset}&limit=${limit}`),
     puzzlesCount: async () => (await get<{ count: number }>('/api/puzzles/count')).count,
     game: (gameId: string) => get<ReplayData>(`/api/games/${encodeURIComponent(gameId)}`),
     playerStats: (publicId: string) => get<PlayerStats>(`/api/players/${encodeURIComponent(publicId)}/stats`),
