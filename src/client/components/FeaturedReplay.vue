@@ -22,24 +22,23 @@ const joinNames = (names: string[]) => names.length <= 1
     : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 
 /**
- * "Winner outlasted A, B, C, D and 3 others", or "X and Y outlasted …" when last players fell together.
+ * "Winner outlasted A, B, C, D and 3 others".
+ * Without winner, players sharing the best place: "X and Y outlasted A, B…", or "X and Y fell together" if nobody else.
  */
 const summary = computed(() => {
     if (!model.value) return null;
 
     const players = [...model.value.data.players].sort((a, b) => a.finalPlace - b.finalPlace);
-    const winners = players.filter(p => p.finalPlace === 1).map(p => p.profile.pseudo);
-    const others = players.filter(p => p.finalPlace !== 1).map(p => p.profile.pseudo);
-    const shown = others.slice(0, Math.max(1, MAX_NAMES - winners.length));
-
-    if (others.length === 0) {
-        return { winners: joinNames(winners), outlasted: null };
-    }
+    const bestPlace = players[0]?.finalPlace;
+    const best = players.filter(p => p.finalPlace === bestPlace).map(p => p.profile.pseudo);
+    const others = players.filter(p => p.finalPlace !== bestPlace).map(p => p.profile.pseudo);
+    const shown = others.slice(0, Math.max(1, MAX_NAMES - best.length));
 
     return {
-        winners: joinNames(winners),
+        best: joinNames(best),
+        together: best.length > 1,
         // Show the last name rather than "and 1 other"
-        outlasted: others.length - shown.length > 1
+        outlasted: others.length === 0 ? null : others.length - shown.length > 1
             ? `${shown.join(', ')} and ${others.length - shown.length} others`
             : joinNames(others),
     };
@@ -79,10 +78,10 @@ onBeforeUnmount(() => clearInterval(interval));
         </div>
         <small class="text-body-secondary">
             <template v-if="summary?.outlasted">
-                <strong>{{ summary.winners }}</strong> outlasted {{ summary.outlasted }}
+                <strong>{{ summary.best }}</strong> outlasted {{ summary.outlasted }}
             </template>
             <template v-else-if="summary">
-                <strong>{{ summary.winners }}</strong> fell together
+                <strong>{{ summary.best }}</strong><template v-if="summary.together"> fell together</template>
             </template>
         </small>
     </RouterLink>
